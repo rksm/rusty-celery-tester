@@ -39,6 +39,7 @@ where
         cleanup: bool,
     ) -> eyre::Result<Self> {
         let task_id = format!("celery-task-meta-{task_id}");
+        debug!(%task_id, %redis_backend, "getting task result");
         let redis = redis::Client::open(redis_backend)?;
         let mut con = redis.get_async_connection().await?;
         let start = std::time::Instant::now();

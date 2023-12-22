@@ -1,13 +1,13 @@
 version: "3.8"
 services:
 
-  rabbitmq-celery-test:
-    image: "rabbitmq:3-management"
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-    volumes:
-      - 'data_for_rabbitmq_celery_test:/data'
+  # rabbitmq-celery-test:
+  #   image: "rabbitmq:3-management"
+  #   ports:
+  #     - "5672:5672"
+  #     - "15672:15672"
+  #   volumes:
+  #     - 'data_for_rabbitmq_celery_test:/data'
 
   redis:
     image: "redis"
@@ -16,5 +16,5 @@ services:
       - 6380:6379
     command: "redis-server --save 60 1 --loglevel warning"
 
-volumes:
-  data_for_rabbitmq_celery_test:
+# volumes:
+#   data_for_rabbitmq_celery_test:
