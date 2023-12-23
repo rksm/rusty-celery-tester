@@ -1,7 +1,6 @@
 #[macro_use]
 extern crate tracing;
 
-mod task;
 mod task_failure;
 mod tasks;
 
@@ -55,14 +54,15 @@ mod worker {
 }
 
 mod master {
-    use crate::task::Task;
 
     use super::tasks;
     use super::MasterArgs;
 
     pub async fn run(_args: MasterArgs) {
-        let task = tasks::AddTask::start((1, 2)).await.expect("start");
-        let result = task.wait_for_result().await.expect("wait_for_result");
-        dbg!(result);
+        let app = tasks::app().await.expect("app");
+        let task = tasks::add::new(1, 2);
+        let result = app.send_task(task).await.expect("send_task");
+        let val = result.get().fetch().await.expect("fetch");
+        dbg!(val);
     }
 }

@@ -10,11 +10,11 @@ services:
   #     - 'data_for_rabbitmq_celery_test:/data'
 
   redis:
-    image: "redis"
+    image: redis/redis-stack
     container_name: "redis-celery-test"
     ports:
       - 6380:6379
-    command: "redis-server --save 60 1 --loglevel warning"
+    command: "redis-server --save 60 1 --loglevel warning --loadmodule /us
 
 # volumes:
 #   data_for_rabbitmq_celery_test:

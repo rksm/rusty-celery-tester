@@ -1,9 +1,12 @@
 import os
 from celery import Celery
 import logging
+from celery.canvas import Signature
+from celery.result import AsyncResult
 
 from celery.utils.log import get_task_logger
 
+logging.basicConfig(level=logging.DEBUG)
 task_logger = get_task_logger(__name__)
 task_logger.setLevel(logging.DEBUG)
 
@@ -26,8 +29,6 @@ def add(x: int, y: int):
 
 
 if __name__ == '__main__':
-    # resut = add.delay(id='___', x=1, y=2)
-    # print(resut.get())
-    # add.apply_async(kwargs={'id': '___', 'x': 1, 'y': 2})
-    # add.apply_async(kwargs={'id': '___', 'x': 1, 'y': 2})
-    print("started")
+    result: AsyncResult = add.delay(1, 2)
+    print(f"waiting for result: {result.id}")
+    print(result.get())

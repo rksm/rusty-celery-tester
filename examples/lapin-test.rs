@@ -18,5 +18,5 @@ async fn run() {
     dbg!(status);
 
     let channel = con.create_channel().await.expect("create_channel");
-    channel.queue_declare(queue, options, arguments)
+    // channel.queue_declare(queue, options, arguments)
 }
