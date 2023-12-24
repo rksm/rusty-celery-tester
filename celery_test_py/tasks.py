@@ -51,4 +51,18 @@ if __name__ == '__main__':
         result.get()
         assert False
     except Exception as e:
-        assert str(e) == "expected"
+        assert str(e) == "failure expected"
+
+    result: AsyncResult = unexpected_failure.delay()
+    try:
+        result.get()
+        assert False
+    except Exception as e:
+        assert str(e) == "failure unexpected"
+
+    result: AsyncResult = task_with_timeout.delay()
+    try:
+        result.get()
+        assert False
+    except Exception as e:
+        assert str(e) == "failure unexpected"

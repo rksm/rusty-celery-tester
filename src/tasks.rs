@@ -9,14 +9,12 @@ pub async fn add(x: i32, y: i32) -> TaskResult<i32> {
 
 #[celery::task(time_limit = 1, name = "expected_failure", max_retries = 0)]
 pub async fn expected_failure() -> TaskResult<i32> {
-    Err(TaskError::ExpectedError("failure expected".to_string()))
+    Err(TaskError::expected("failure expected".to_string()))
 }
 
 #[celery::task(time_limit = 1, name = "unexpected_failure")]
 pub async fn unexpected_failure() -> TaskResult<i32> {
-    Err(TaskError::UnexpectedError(
-        "failure still expected".to_string(),
-    ))
+    Err(TaskError::unexpected("failure still expected".to_string()))
 }
 
 #[celery::task(time_limit = 1, name = "task_with_timeout")]

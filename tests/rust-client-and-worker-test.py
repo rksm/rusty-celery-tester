@@ -105,8 +105,8 @@ class Client(VerbosePopen):
         tasks = [
             "add",
             "expected_failure",
-            # "task_with_timeout",
-            # "unexpected_failure",
+            "task_with_timeout",
+            "unexpected_failure",
         ]
 
         for task in tasks:

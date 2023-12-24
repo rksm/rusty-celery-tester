@@ -92,16 +92,18 @@ mod client {
                     let result = result.get().fetch().await;
 
                     match result {
-                        Err(CeleryError::TaskError(TaskError::ExpectedError(_))) => {
+                        Err(CeleryError::TaskError(TaskError {
+                            kind: TaskErrorType::Expected,
+                            ..
+                        })) => {
                             info!("expected error from rust")
                         }
 
-                        Err(CeleryError::TaskError(TaskError::PythonException(err)))
-                            if err
-                                .exc_traceback
-                                .as_ref()
-                                .map_or(false, |tb| tb.contains("Exception: expected")) =>
-                        {
+                        Err(CeleryError::TaskError(TaskError {
+                            kind: TaskErrorType::Other,
+                            exc_traceback: Some(tb),
+                            ..
+                        })) if tb.contains("Exception: expected") => {
                             info!("expected error from python")
                         }
 
@@ -115,16 +117,18 @@ mod client {
                     let result = result.get().fetch().await;
 
                     match result {
-                        Err(CeleryError::TaskError(TaskError::UnexpectedError(_))) => {
+                        Err(CeleryError::TaskError(TaskError {
+                            kind: TaskErrorType::Unexpected,
+                            ..
+                        })) => {
                             info!("expected error from rust")
                         }
 
-                        Err(CeleryError::TaskError(TaskError::PythonException(err)))
-                            if err
-                                .exc_traceback
-                                .as_ref()
-                                .map_or(false, |tb| tb.contains("Exception: unexpected")) =>
-                        {
+                        Err(CeleryError::TaskError(TaskError {
+                            kind: TaskErrorType::Other,
+                            exc_traceback: Some(tb),
+                            ..
+                        })) if tb.contains("Exception: unexpected") => {
                             info!("unexpected error from python")
                         }
 
@@ -137,10 +141,11 @@ mod client {
                     let result = app.send_task(task).await.expect("send_task");
                     let result = result.get().fetch().await;
                     match result {
-                        Err(CeleryError::TaskError(TaskError::PythonException(err)))
-                            if err.exc_type == "TimeLimitExceeded"
-                                || err.exc_type == "SoftTimeLimitExceeded" =>
-                        {
+                        Err(CeleryError::TaskError(TaskError {
+                            kind: TaskErrorType::Other,
+                            exc_type: ty,
+                            ..
+                        })) if ty == "TimeLimitExceeded" || ty == "SoftTimeLimitExceeded" => {
                             info!("timeout error from python")
                         }
 
