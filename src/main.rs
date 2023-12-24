@@ -4,7 +4,7 @@ extern crate tracing;
 mod task_failure;
 mod tasks;
 
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 
 #[derive(Parser)]
 struct Args {
@@ -15,14 +15,29 @@ struct Args {
 #[derive(Parser)]
 enum Command {
     Worker(WorkerArgs),
-    Master(MasterArgs),
+    Client(ClientArgs),
 }
 
 #[derive(Parser)]
 struct WorkerArgs {}
 
 #[derive(Parser)]
-struct MasterArgs {}
+struct ClientArgs {
+    #[clap(value_enum, value_delimiter = ',')]
+    task: Vec<ClientTask>,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum ClientTask {
+    #[clap(name = "add")]
+    Add,
+    #[clap(name = "expected_failure")]
+    ExpectedFailure,
+    #[clap(name = "unexpected_failure")]
+    UnexpectedFailure,
+    #[clap(name = "task_with_timeout")]
+    TaskWithTimeout,
+}
 
 #[tokio::main]
 async fn main() {
@@ -37,8 +52,8 @@ async fn run(args: Args) {
         Command::Worker(args) => {
             worker::run(args).await;
         }
-        Command::Master(args) => {
-            master::run(args).await;
+        Command::Client(args) => {
+            client::run(args).await;
         }
     }
 }
@@ -53,16 +68,87 @@ mod worker {
     }
 }
 
-mod master {
+mod client {
+
+    use celery::prelude::*;
 
     use super::tasks;
-    use super::MasterArgs;
+    use super::ClientArgs;
 
-    pub async fn run(_args: MasterArgs) {
+    pub async fn run(args: ClientArgs) {
         let app = tasks::app().await.expect("app");
-        let task = tasks::add::new(1, 2);
-        let result = app.send_task(task).await.expect("send_task");
-        let val = result.get().fetch().await.expect("fetch");
-        dbg!(val);
+        println!("RUNNING TASK {:?}", args.task);
+        for task in &args.task {
+            match task {
+                crate::ClientTask::Add => {
+                    let task = tasks::add::new(1, 2);
+                    let result = app.send_task(task).await.expect("send_task");
+                    assert_eq!(3, result.get().fetch().await.unwrap());
+                }
+
+                crate::ClientTask::ExpectedFailure => {
+                    let task = tasks::expected_failure::new();
+                    let result = app.send_task(task).await.expect("send_task");
+                    let result = result.get().fetch().await;
+
+                    match result {
+                        Err(CeleryError::TaskError(TaskError::ExpectedError(_))) => {
+                            info!("expected error from rust")
+                        }
+
+                        Err(CeleryError::TaskError(TaskError::PythonException(err)))
+                            if err
+                                .exc_traceback
+                                .as_ref()
+                                .map_or(false, |tb| tb.contains("Exception: expected")) =>
+                        {
+                            info!("expected error from python")
+                        }
+
+                        _ => panic!("unexpected error: {:?}", result),
+                    }
+                }
+
+                crate::ClientTask::UnexpectedFailure => {
+                    let task = tasks::unexpected_failure::new();
+                    let result = app.send_task(task).await.expect("send_task");
+                    let result = result.get().fetch().await;
+
+                    match result {
+                        Err(CeleryError::TaskError(TaskError::UnexpectedError(_))) => {
+                            info!("expected error from rust")
+                        }
+
+                        Err(CeleryError::TaskError(TaskError::PythonException(err)))
+                            if err
+                                .exc_traceback
+                                .as_ref()
+                                .map_or(false, |tb| tb.contains("Exception: unexpected")) =>
+                        {
+                            info!("unexpected error from python")
+                        }
+
+                        _ => panic!("totally unexpected error: {:?}", result),
+                    }
+                }
+
+                crate::ClientTask::TaskWithTimeout => {
+                    let task = tasks::task_with_timeout::new();
+                    let result = app.send_task(task).await.expect("send_task");
+                    let result = result.get().fetch().await;
+                    match result {
+                        Err(CeleryError::TaskError(TaskError::PythonException(err)))
+                            if err.exc_type == "TimeLimitExceeded"
+                                || err.exc_type == "SoftTimeLimitExceeded" =>
+                        {
+                            info!("timeout error from python")
+                        }
+
+                        _ => panic!("totally unexpected error: {:?}", result),
+                    }
+                }
+            }
+        }
+        println!("TASK {:?} DONE", args.task);
     }
 }

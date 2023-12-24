@@ -19,7 +19,7 @@ dev *args='':
     cargo watch -x run -- {{ args }}
 
 example:
-    runall \
+    runall --names "master,worker" \
     'just rust-master' \
     'just rust-worker'
 
