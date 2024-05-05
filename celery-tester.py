@@ -89,7 +89,8 @@ class RustWorker:
     def __enter__(self):
         self.proc = VerbosePopen("worker", ["cargo", "run", "--", "worker", "--broker", self.broker],
                                  stdout=sp.PIPE,
-                                 stderr=sp.PIPE)
+                                 stderr=sp.PIPE,
+                                 cwd="rust")
         time.sleep(1)
         assert not self.crashed(), "worker crashed"
         return self
@@ -109,8 +110,8 @@ class PythonWorker:
         self.broker = broker
 
     def __enter__(self):
-        self.proc = VerbosePopen("pyworker", ["./venv/bin/python", "-m", "celery", "-A",
-                                              "celery_test_py.tasks",
+        self.proc = VerbosePopen("pyworker", ["python", "-m", "celery", "-A",
+                                              "py.tasks",
                                               *(["-q"] if not self.verbose else []),
                                               "worker",
                                               "-l", "DEBUG" if self.verbose else "CRITICAL",
@@ -156,7 +157,8 @@ class RustClient(Client):
         super().__init__(f"client-{task}",
                          ["cargo", "run", "--", "client", "--broker", broker, task],
                          stdout=sp.PIPE,
-                         stderr=sp.PIPE)
+                         stderr=sp.PIPE,
+                         cwd="rust")
 
 
 class PythonClient(Client):
@@ -164,7 +166,7 @@ class PythonClient(Client):
     def __init__(self, task: str, broker: str):
         logger.info(f"running python client for {task}")
         super().__init__(f"pyclient-{task}",
-                         ["./venv/bin/python", "-m", "celery_test_py.tasks", "--task", task],
+                         ["python", "-m", "py.tasks", "--task", task],
                          env={**os.environ,
                              "CELERY_BROKER": os.environ["REDIS_ADDR" if broker == "redis" else "AMQP_ADDR"]},
                          stdout=sp.PIPE,

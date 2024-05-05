@@ -13,8 +13,8 @@ log = "0.4.20"
 serde = { version = "1.0.193", features = ["derive"] }
 serde_json = "1.0.108"
 
-# celery = { git = "https://github.com/rksm/rusty-celery", rev = "92f0f350adf85695971487d59798ebcbe6337f74" } # fix for submitting tasks from rust to python
-celery = { path = '/home/robert/projects/rust/libs/rusty-celery' }
+celery = { git = "https://github.com/rksm/rusty-celery", branch = "main" }
+# celery = { path = '/home/robert/projects/rust/libs/rusty-celery' }
 tokio = "1.35.0"
 tracing = "0.1.40"
 dotenv = "0.15.0"

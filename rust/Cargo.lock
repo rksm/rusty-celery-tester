@@ -406,6 +406,7 @@ dependencies = [
 [[package]]
 name = "celery"
 version = "0.5.5"
+source = "git+https://github.com/rksm/rusty-celery?branch=main#212e21fec64dc057505ea34db4612adb58066e34"
 dependencies = [
  "async-trait",
  "base64",
@@ -434,6 +435,7 @@ dependencies = [
 [[package]]
 name = "celery-codegen"
 version = "0.5.5"
+source = "git+https://github.com/rksm/rusty-celery?branch=main#212e21fec64dc057505ea34db4612adb58066e34"
 dependencies = [
  "proc-macro2",
  "quote",

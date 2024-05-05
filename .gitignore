@@ -2,3 +2,5 @@
 __pycache__
 /venv/
 /.direnv/
+/.venv/
+/rust/target/

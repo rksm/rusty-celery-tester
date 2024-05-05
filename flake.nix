@@ -13,6 +13,7 @@
       in
       {
         devShells.default = pkgs.mkShell {
+
           nativeBuildInputs = with pkgs; [
             rustc
             cargo
@@ -21,6 +22,7 @@
           ];
 
           buildInputs = with pkgs; [
+            pythonPackages.venvShellHook
             openssl
             clang
           ] ++ (if pkgs.stdenv.isDarwin then [ libiconv ] else [ ]);
@@ -30,6 +32,7 @@
             python
             pythonPackages.celery
             pythonPackages.redis
+            pythonPackages.python-dotenv
 
             rust-analyzer
             rustfmt
@@ -45,6 +48,11 @@
             pkgs.stdenv.cc.cc
           ];
 
+          venvDir = ".venv";
+          postVenvCreation = ''
+            unset SOURCE_DATE_EPOCH
+            pip install -r requirements.txt
+          '';
 
         };
       }
