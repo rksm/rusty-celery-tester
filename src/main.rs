@@ -19,10 +19,16 @@ enum Command {
 }
 
 #[derive(Parser)]
-struct WorkerArgs {}
+struct WorkerArgs {
+    #[clap(long, value_enum)]
+    broker: tasks::BrokerChoice,
+}
 
 #[derive(Parser)]
 struct ClientArgs {
+    #[clap(long, value_enum)]
+    broker: tasks::BrokerChoice,
+
     #[clap(value_enum, value_delimiter = ',')]
     task: Vec<ClientTask>,
 }
@@ -62,8 +68,8 @@ mod worker {
     use super::tasks;
     use super::WorkerArgs;
 
-    pub async fn run(_args: WorkerArgs) {
-        let app = tasks::app().await.expect("app");
+    pub async fn run(args: WorkerArgs) {
+        let app = tasks::app(args.broker).await.expect("app");
         app.consume_from(&["celery"]).await.expect("consume_from");
     }
 }
@@ -76,7 +82,7 @@ mod client {
     use super::ClientArgs;
 
     pub async fn run(args: ClientArgs) {
-        let app = tasks::app().await.expect("app");
+        let app = tasks::app(args.broker).await.expect("app");
         println!("RUNNING TASK {:?}", args.task);
         for task in &args.task {
             match task {

@@ -26,11 +26,21 @@ example:
 rabbitmq:
     docker-compose up -d
 
+reset-backend:
+    just rabbitmq-docker-stop || true
+    just redis-docker-stop || true
+
 redis-docker:
-    docker run --rm -d -p 6380:6379 --name redis-celery-test redis/redis-stack
+    docker run --rm -d -p 6379:6379 --name redis-celery-test redis/redis-stack
 
 redis-docker-stop:
     docker stop redis-celery-test
+
+rabbitmq-docker:
+    docker run --rm -d -p 5672:5672 -p 15672:15672 --name rabbitmq-celery-test rabbitmq:3-management
+
+rabbitmq-docker-stop:
+    docker stop rabbitmq-celery-test
 
 redis-cli *args="":
     docker exec -it redis-celery-test redis-cli {{ args }}

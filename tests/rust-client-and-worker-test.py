@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
+from typing import Literal
 import dotenv
 import logging
 import os
@@ -10,28 +11,35 @@ from threading import Thread
 
 logger = logging.getLogger(__name__)
 
-class RedisContext:
+Broker = Literal["redis", "amqp"]
 
-    def __init__(self):
-        self.name = "redis-celery-test"
+class BackendContext:
+
+    def __init__(self, name: str):
+        self.name = name
         self.started_new_container = False
+
+    @property
+    def kind(self):
+        return self.name.split("-")[0]
+
+    def start(self):
+        raise NotImplementedError()
 
     def __enter__(self):
         # Perform the setup (start redis if not running)
-        logger.debug("starting redis docker container")
-        running = sp.run(["docker", "ps", "-q", "-f", f"name={self.name}"],
-                         stdout=sp.PIPE)
+        kind = self.kind
+        logger.debug(f"starting {kind} docker container")
+        running = sp.run(["docker", "ps", "-q", "-f", f"name={self.name}"], stdout=sp.PIPE)
 
         if not running.stdout.strip():
             # If the container is not running, start a new one
-            sp.run([
-                "docker", "run", "-d", "--rm", "-p", "6380:6379", "--name",
-                self.name, "redis/redis-stack"
-            ])
+            logger.debug(f"{kind} container not running, starting")
+            self.start()
             self.started_new_container = True
-            logger.debug("redis container started")
+            logger.debug(f"{kind} container started")
         else:
-            logger.debug("redis already running")
+            logger.debug("{kind} already running")
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
@@ -40,6 +48,24 @@ class RedisContext:
             logger.debug("stopping redis docker container")
             sp.run(["docker", "stop", self.name])
             logger.debug("redis container stopped")
+
+
+class RedisContext(BackendContext):
+
+    def __init__(self):
+        super().__init__("redis-celery-test")
+
+    def start(self):
+        sp.run(["docker", "run", "-d", "--rm", "-p", "6380:6379", "--name", self.name, "redis/redis-stack"])
+
+
+class AmqpContext(BackendContext):
+
+        def __init__(self):
+            super().__init__("rabbitmq-celery-test")
+
+        def start(self):
+            sp.run(["docker", "run", "-d", "--rm", "-p", "5672:5672", "-p", "15672:15672", "--name", self.name, "rabbitmq:3-management"])
 
 
 class VerbosePopen(sp.Popen):
@@ -57,8 +83,11 @@ class VerbosePopen(sp.Popen):
 
 class RustWorker:
 
+    def __init__(self, broker: Broker):
+        self.broker = broker
+
     def __enter__(self):
-        self.proc = VerbosePopen("worker", ["cargo", "run", "--", "worker"],
+        self.proc = VerbosePopen("worker", ["cargo", "run", "--", "worker", "--broker", self.broker],
                                  stdout=sp.PIPE,
                                  stderr=sp.PIPE)
         time.sleep(1)
@@ -75,8 +104,9 @@ class RustWorker:
 
 class PythonWorker:
 
-    def __init__(self, verbose: bool):
+    def __init__(self, verbose: bool, broker: Broker):
         self.verbose = verbose
+        self.broker = broker
 
     def __enter__(self):
         self.proc = VerbosePopen("pyworker", ["./venv/bin/python", "-m", "celery", "-A",
@@ -85,6 +115,8 @@ class PythonWorker:
                                               "worker",
                                               "-l", "DEBUG" if self.verbose else "CRITICAL",
                                               "-c", "1"],
+                                 env={**os.environ,
+                                     "CELERY_BROKER": os.environ["REDIS_ADDR" if self.broker == "redis" else "AMQP_ADDR"]},
                                  stdout=sp.PIPE,
                                  stderr=sp.PIPE)
         time.sleep(1)
@@ -99,50 +131,54 @@ class PythonWorker:
         return self.proc.poll() is not None
 
 
+TASKS = [
+    "add",
+    "expected_failure",
+    "task_with_timeout",
+    "unexpected_failure",
+]
+
+
 class Client(VerbosePopen):
     @classmethod
-    def run(cls):
-        tasks = [
-            "add",
-            "expected_failure",
-            "task_with_timeout",
-            "unexpected_failure",
-        ]
-
+    def run(cls, tasks: list[str], broker: Broker):
         for task in tasks:
             logger.info(f"running task {task}")
-            client = cls(task)
-            client.wait(timeout=10)
+            client = cls(task, broker)
+            client.wait()
             assert client.returncode == 0, f"client failed for {task}"
 
 
 class RustClient(Client):
 
-    def __init__(self, task: str):
+    def __init__(self, task: str, broker: str):
         logger.info(f"running rust client for {task}")
         super().__init__(f"client-{task}",
-                         ["cargo", "run", "--", "client", task],
+                         ["cargo", "run", "--", "client", "--broker", broker, task],
                          stdout=sp.PIPE,
                          stderr=sp.PIPE)
 
 
 class PythonClient(Client):
 
-    def __init__(self, task: str):
+    def __init__(self, task: str, broker: str):
         logger.info(f"running python client for {task}")
         super().__init__(f"pyclient-{task}",
-                         ["./venv/bin/python", "-m", "celery_test_py.tasks"],
+                         ["./venv/bin/python", "-m", "celery_test_py.tasks", "--task", task],
+                         env={**os.environ,
+                             "CELERY_BROKER": os.environ["REDIS_ADDR" if broker == "redis" else "AMQP_ADDR"]},
                          stdout=sp.PIPE,
                          stderr=sp.PIPE)
 
 
 def main(args: argparse.Namespace):
-    with RedisContext():
+    context = RedisContext() if args.broker == "redis" else AmqpContext()
+    with context:
         workers = []
         if args.rust_worker:
-            workers.append(RustWorker())
+            workers.append(RustWorker(broker=args.broker))
         if args.python_worker:
-            workers.append(PythonWorker(verbose=args.verbose))
+            workers.append(PythonWorker(verbose=args.verbose, broker=args.broker))
         clients = []
         if args.rust_client:
             clients.append(RustClient)
@@ -151,7 +187,7 @@ def main(args: argparse.Namespace):
         for worker in workers:
             with worker:
                 for client in clients:
-                    client.run()
+                    client.run(args.tasks, args.broker)
 
 
 if __name__ == "__main__":
@@ -162,8 +198,13 @@ if __name__ == "__main__":
     parser.add_argument("--python-worker", action="store_true")
     parser.add_argument("--rust-client", action="store_true")
     parser.add_argument("--python-client", action="store_true")
+    parser.add_argument("--tasks", nargs="+", choices=["add", "expected_failure", "unexpected_failure", "task_with_timeout"], help="If not set, all tasks are run")
+    parser.add_argument("--broker", choices=["redis", "amqp"], default="redis")
     parser.add_argument("--verbose", "-v", action="store_true")
     args = parser.parse_args()
+
+    if not args.tasks:
+        args.tasks = TASKS
 
     if args.verbose:
         logging.basicConfig(level=logging.INFO)
